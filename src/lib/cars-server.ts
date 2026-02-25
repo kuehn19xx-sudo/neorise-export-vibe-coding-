@@ -5,6 +5,7 @@ type MaybeCarRow = Record<string, unknown>;
 const UUID_V4_OR_V1_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEFAULT_IMAGE_FALLBACK = "/placeholder-car.jpg";
+const SUPABASE_RETRY_DELAYS_MS = [250, 700];
 
 function toStringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -115,6 +116,20 @@ function normalizeCar(row: MaybeCarRow): CarRecord {
   };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSupabaseError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("522") ||
+    lower.includes("connection timed out") ||
+    lower.includes("cloudflare") ||
+    lower.includes("<!doctype html>")
+  );
+}
+
 async function loadImagesByCarId(carIds: string[]): Promise<Map<string, string[]>> {
   const imageMap = new Map<string, string[]>();
   if (carIds.length === 0) return imageMap;
@@ -140,10 +155,19 @@ async function loadImagesByCarId(carIds: string[]): Promise<Map<string, string[]
 }
 
 export async function getActiveCarsServer(): Promise<CarRecord[]> {
-  let { data, error } = await supabaseServer
-    .from("cars")
-    .select("*")
-    .in("status", ["active", "published", "available"]);
+  let data: unknown[] | null = null;
+  let error: { message: string } | null = null;
+  for (let attempt = 0; attempt <= SUPABASE_RETRY_DELAYS_MS.length; attempt += 1) {
+    const query = await supabaseServer
+      .from("cars")
+      .select("*")
+      .in("status", ["active", "published", "available"]);
+    data = (query.data as unknown[] | null) ?? null;
+    error = query.error ? { message: query.error.message } : null;
+    if (!error) break;
+    if (!isTransientSupabaseError(error.message) || attempt === SUPABASE_RETRY_DELAYS_MS.length) break;
+    await sleep(SUPABASE_RETRY_DELAYS_MS[attempt]);
+  }
 
   if (error) {
     console.error("[cars-server] supabase cars query failed, fallback to local carsData:", error.message);
@@ -152,8 +176,8 @@ export async function getActiveCarsServer(): Promise<CarRecord[]> {
 
   if (!data || data.length === 0) {
     const fallbackQuery = await supabaseServer.from("cars").select("*");
-    data = fallbackQuery.data ?? [];
-    error = fallbackQuery.error ?? null;
+    data = (fallbackQuery.data as unknown[] | null) ?? [];
+    error = fallbackQuery.error ? { message: fallbackQuery.error.message } : null;
     if (error) {
       console.error("[cars-server] fallback cars query failed, fallback to local carsData:", error.message);
       return getActiveCars();
@@ -181,7 +205,16 @@ export async function getCarByIdServer(id: string): Promise<CarRecord | undefine
     return getCarById(id);
   }
 
-  const { data, error } = await supabaseServer.from("cars").select("*").eq("id", id).maybeSingle();
+  let data: MaybeCarRow | null = null;
+  let error: { message: string } | null = null;
+  for (let attempt = 0; attempt <= SUPABASE_RETRY_DELAYS_MS.length; attempt += 1) {
+    const query = await supabaseServer.from("cars").select("*").eq("id", id).maybeSingle();
+    data = (query.data as MaybeCarRow | null) ?? null;
+    error = query.error ? { message: query.error.message } : null;
+    if (!error) break;
+    if (!isTransientSupabaseError(error.message) || attempt === SUPABASE_RETRY_DELAYS_MS.length) break;
+    await sleep(SUPABASE_RETRY_DELAYS_MS[attempt]);
+  }
 
   if (error) {
     console.error("[cars-server] supabase car detail query failed, fallback to local carsData:", error.message);
