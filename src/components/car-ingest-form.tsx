@@ -21,6 +21,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 type SubmitState = "idle" | "submitting" | "success" | "error";
 type CarIngestFormProps = {
   requireAdminToken?: boolean;
+  showAdminTokenInput?: boolean;
 };
 
 type SelectedImage = {
@@ -168,7 +169,7 @@ function SortablePreviewCard({ item, index, total, onPreview, onRemove, onMoveSt
   );
 }
 
-export function CarIngestForm({ requireAdminToken = false }: CarIngestFormProps) {
+export function CarIngestForm({ requireAdminToken = false, showAdminTokenInput = false }: CarIngestFormProps) {
   const [carText, setCarText] = useState(SAMPLE_TEXT);
   const [images, setImages] = useState<SelectedImage[]>([]);
   const [adminToken, setAdminToken] = useState("");
@@ -461,16 +462,18 @@ export function CarIngestForm({ requireAdminToken = false }: CarIngestFormProps)
           ) : null}
         </label>
 
-        {requireAdminToken ? (
+        {requireAdminToken || showAdminTokenInput ? (
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-slate-800">Admin Token</span>
+            <span className="text-sm font-medium text-slate-800">
+              Admin Token{requireAdminToken ? "" : " (Optional)"}
+            </span>
             <input
               type="password"
               value={adminToken}
               onChange={(event) => setAdminToken(event.target.value)}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff7a1a]"
-              placeholder="Enter ADMIN_INGEST_TOKEN"
-              required
+              placeholder={requireAdminToken ? "Enter ADMIN_INGEST_TOKEN" : "Optional: use x-admin-token instead of cookie session"}
+              required={requireAdminToken}
             />
           </label>
         ) : null}
