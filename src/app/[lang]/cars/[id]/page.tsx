@@ -76,23 +76,23 @@ function buildSpecRows(car: Awaited<ReturnType<typeof getCarByIdServer>>): SpecR
     },
     {
       left: { label: "Drivetrain", value: pickSpec(lookup, ["drivetrain", "drive_system", "drive", "drive type", "drive_type"]) },
-      right: { label: "Batt.Cap.(kWh)", value: pickSpec(lookup, ["batt.cap.(kwh)", "battery", "battery capacity"]) },
+      right: { label: "Batt.Cap.(kWh)", value: pickSpec(lookup, ["battery_kwh", "batt.cap.(kwh)", "battery", "battery capacity"]) },
     },
     {
       left: { label: "Range(km)", value: pickSpec(lookup, ["range(km)", "range_km", "range"]) },
-      right: { label: "Motor Power(kW)", value: pickSpec(lookup, ["motor power(kw)", "motor_kw", "motor power", "power"]) },
+      right: { label: "Motor Power(kW)", value: pickSpec(lookup, ["motor_power_kw", "motor power(kw)", "motor_kw", "motor power", "power"]) },
     },
     {
       left: { label: "Seats", value: pickSpec(lookup, ["seats"]) },
       right: { label: "Doors", value: pickSpec(lookup, ["doors"]) },
     },
     {
-      left: { label: "Dim.(mm)", value: pickSpec(lookup, ["dim.(mm)", "dimension", "dimensions"]) },
-      right: { label: "M³", value: pickSpec(lookup, ["m³", "m3", "volume"]) },
+      left: { label: "Dim.(mm)", value: pickSpec(lookup, ["dimensions_mm", "dim.(mm)", "dimension", "dimensions"]) },
+      right: { label: "M³", value: pickSpec(lookup, ["cubic_meters", "m³", "m3", "volume"]) },
     },
     {
-      left: { label: "Weight(kg)", value: pickSpec(lookup, ["weight(kg)", "weight"]) },
-      right: { label: "Max.Cap(kg)", value: pickSpec(lookup, ["max.cap(kg)", "max cap", "max capacity"]) },
+      left: { label: "Weight(kg)", value: pickSpec(lookup, ["weight_kg", "weight(kg)", "weight"]) },
+      right: { label: "Max.Cap(kg)", value: pickSpec(lookup, ["max_load_kg", "max.cap(kg)", "max cap", "max capacity"]) },
     },
   ];
 }
