@@ -11,10 +11,90 @@ type CarDetailPageProps = {
   params: Promise<{ lang: string; id: string }>;
 };
 
+type SpecCell = {
+  label: string;
+  value: string;
+};
+
+type SpecRow = {
+  left: SpecCell;
+  right: SpecCell;
+};
+
 function createWhatsappLink(carTitle: string, carId: string) {
   const phone = "0000000000";
   const message = encodeURIComponent(`Hello NeoRise, I want this car: ${carTitle} (${carId})`);
   return `https://wa.me/${phone}?text=${message}`;
+}
+
+function toDisplay(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  const text = String(value).trim();
+  return text === "" ? "-" : text;
+}
+
+function pickSpec(lookup: Record<string, string>, keys: string[], fallback?: unknown): string {
+  for (const key of keys) {
+    const found = lookup[key.toLowerCase()];
+    if (found && found.trim() !== "") {
+      return found;
+    }
+  }
+  return toDisplay(fallback);
+}
+
+function buildSpecRows(car: Awaited<ReturnType<typeof getCarByIdServer>>): SpecRow[] {
+  if (!car) return [];
+
+  const lookup = Object.fromEntries(
+    Object.entries(car.specs ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)]),
+  );
+
+  return [
+    {
+      left: { label: "Ref ID", value: toDisplay(car.id) },
+      right: { label: "Steering", value: pickSpec(lookup, ["steering"]) },
+    },
+    {
+      left: { label: "Model Code", value: pickSpec(lookup, ["model code", "model_code", "code"]) },
+      right: { label: "Body Type", value: pickSpec(lookup, ["body type", "body_type"]) },
+    },
+    {
+      left: { label: "Model Year", value: toDisplay(car.year) },
+      right: { label: "Mlg(km)", value: toDisplay(car.mileage) },
+    },
+    {
+      left: {
+        label: "Exterior Color",
+        value: pickSpec(lookup, ["exterior color", "exterior_color", "color"]),
+      },
+      right: { label: "Fuel", value: toDisplay(car.fuel) },
+    },
+    {
+      left: { label: "Engine", value: pickSpec(lookup, ["engine", "engine size", "engine_size"]) },
+      right: { label: "Transmission", value: toDisplay(car.transmission) },
+    },
+    {
+      left: { label: "Drivetrain", value: pickSpec(lookup, ["drivetrain", "drive", "drive type", "drive_type"]) },
+      right: { label: "Batt.Cap.(kWh)", value: pickSpec(lookup, ["batt.cap.(kwh)", "battery", "battery capacity"]) },
+    },
+    {
+      left: { label: "Range(km)", value: pickSpec(lookup, ["range(km)", "range"]) },
+      right: { label: "Motor Power(kW)", value: pickSpec(lookup, ["motor power(kw)", "motor power", "power"]) },
+    },
+    {
+      left: { label: "Seats", value: pickSpec(lookup, ["seats"]) },
+      right: { label: "Doors", value: pickSpec(lookup, ["doors"]) },
+    },
+    {
+      left: { label: "Dim.(mm)", value: pickSpec(lookup, ["dim.(mm)", "dimension", "dimensions"]) },
+      right: { label: "M³", value: pickSpec(lookup, ["m³", "m3", "volume"]) },
+    },
+    {
+      left: { label: "Weight(kg)", value: pickSpec(lookup, ["weight(kg)", "weight"]) },
+      right: { label: "Max.Cap(kg)", value: pickSpec(lookup, ["max.cap(kg)", "max cap", "max capacity"]) },
+    },
+  ];
 }
 
 export default async function CarDetailPage({ params }: CarDetailPageProps) {
@@ -27,6 +107,7 @@ export default async function CarDetailPage({ params }: CarDetailPageProps) {
   const isArabic = language === "ar";
   const messages = getMessages(language);
   const car = await getCarByIdServer(id);
+  const specRows = buildSpecRows(car);
 
   if (!car || car.status !== "active") {
     notFound();
@@ -70,14 +151,24 @@ export default async function CarDetailPage({ params }: CarDetailPageProps) {
             >
               {messages.carDetail.specs}
             </h2>
-            <dl className="grid gap-2 text-sm sm:grid-cols-2">
-              {Object.entries(car.specs).map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-slate-100 px-3 py-2">
-                  <dt className="font-medium text-slate-700">{label}</dt>
-                  <dd className="text-slate-900">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full border-collapse text-sm text-slate-700">
+                <tbody>
+                  {specRows.map((row) => (
+                    <tr key={`${row.left.label}-${row.right.label}`} className="border-b border-slate-200 last:border-b-0">
+                      <th className="w-1/4 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">
+                        {row.left.label}
+                      </th>
+                      <td className="w-1/4 px-3 py-2 text-slate-900">{row.left.value}</td>
+                      <th className="w-1/4 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">
+                        {row.right.label}
+                      </th>
+                      <td className="w-1/4 px-3 py-2 text-slate-900">{row.right.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
