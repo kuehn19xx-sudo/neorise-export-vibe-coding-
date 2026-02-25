@@ -86,6 +86,12 @@ function normalizeCar(row: CarRow) {
   const engine = toStringValue(row.engine);
   const trans = toStringValue(row.trans) || toStringValue(row.transmission);
   const fuel = toStringValue(row.fuel) || toStringValue(row.fuel_type);
+  const specsJson =
+    row.specs_json && typeof row.specs_json === "object" && !Array.isArray(row.specs_json)
+      ? Object.fromEntries(
+          Object.entries(row.specs_json as Record<string, unknown>).map(([key, value]) => [key, String(value ?? "")]),
+        )
+      : {};
 
   return {
     id,
@@ -101,6 +107,7 @@ function normalizeCar(row: CarRow) {
     engine,
     trans,
     fuel,
+    specs_json: specsJson,
   };
 }
 
@@ -146,6 +153,11 @@ function isNoMatchError(message: string) {
   return lower.includes("0 rows") || lower.includes("no rows");
 }
 
+function parseMissingColumnName(message: string): string | null {
+  const match = message.match(/Could not find the '([^']+)' column/i);
+  return match?.[1] ?? null;
+}
+
 async function updateStatusById(
   supabase: LooseSupabaseClient,
   column: "id" | "car_id",
@@ -169,14 +181,26 @@ const ALLOWED_UPDATE_KEYS = new Set([
   "fuel",
   "status",
   "stock_no",
+  "specs_json",
 ]);
 const NUMERIC_UPDATE_KEYS = new Set(["price", "year", "mileage"]);
 
-function sanitizeCarUpdates(input: Record<string, unknown>): Record<string, string | number> {
-  const updates: Record<string, string | number> = {};
+function sanitizeCarUpdates(input: Record<string, unknown>): Record<string, string | number | Record<string, string>> {
+  const updates: Record<string, string | number | Record<string, string>> = {};
 
   for (const [key, rawValue] of Object.entries(input)) {
     if (!ALLOWED_UPDATE_KEYS.has(key)) continue;
+
+    if (key === "specs_json") {
+      if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) continue;
+      const normalized = Object.fromEntries(
+        Object.entries(rawValue as Record<string, unknown>)
+          .map(([field, value]) => [field, String(value ?? "").trim()])
+          .filter(([, value]) => value.length > 0),
+      );
+      updates[key] = normalized;
+      continue;
+    }
 
     if (NUMERIC_UPDATE_KEYS.has(key)) {
       if (rawValue === null || rawValue === undefined || rawValue === "") continue;
@@ -201,11 +225,32 @@ async function updateCarById(
   supabase: LooseSupabaseClient,
   column: "id" | "car_id",
   carId: string,
-  updates: Record<string, string | number>,
+  updates: Record<string, string | number | Record<string, string>>,
 ) {
-  const { data, error } = await supabase.from("cars").update(updates).eq(column, carId).select("*").maybeSingle();
-  if (!error && data) return { data: data as CarRow, error: null };
-  return { data: null, error: error?.message ?? "Car not found" };
+  const mutableUpdates: Record<string, string | number | Record<string, string>> = { ...updates };
+  const droppedColumns: string[] = [];
+
+  for (let i = 0; i < 6; i += 1) {
+    const { data, error } = await supabase.from("cars").update(mutableUpdates).eq(column, carId).select("*").maybeSingle();
+    if (!error && data) return { data: data as CarRow, error: null, droppedColumns };
+
+    if (error) {
+      const missingColumn = parseMissingColumnName(error.message);
+      if (missingColumn && missingColumn in mutableUpdates) {
+        delete mutableUpdates[missingColumn];
+        droppedColumns.push(missingColumn);
+        if (Object.keys(mutableUpdates).length === 0) {
+          return { data: null, error: `No columns left to update after dropping missing columns: ${droppedColumns.join(", ")}`, droppedColumns };
+        }
+        continue;
+      }
+      return { data: null, error: error.message, droppedColumns };
+    }
+
+    return { data: null, error: "Car not found", droppedColumns };
+  }
+
+  return { data: null, error: "Failed to update car: too many retries", droppedColumns };
 }
 
 export async function PATCH(request: Request) {
@@ -242,6 +287,15 @@ export async function PATCH(request: Request) {
       let result = await updateCarById(supabase, "id", carId, updates);
       if (result.error && isNoMatchError(result.error)) {
         result = await updateCarById(supabase, "car_id", carId, updates);
+      }
+      if (!result.error && result.droppedColumns.includes("specs_json")) {
+        return NextResponse.json(
+          {
+            error: "Parameter table was not saved because cars.specs_json column is missing",
+            hint: "Add specs_json jsonb column to public.cars, then retry edit.",
+          },
+          { status: 400 },
+        );
       }
       if (result.error || !result.data) {
         throw new Error(`Failed to update car: ${result.error ?? "car not found"}`);

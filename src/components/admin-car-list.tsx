@@ -159,9 +159,9 @@ export function AdminCarList() {
         engine: editForm.engine.trim(),
         trans: editForm.trans.trim(),
         fuel: editForm.fuel.trim(),
-        stock_no: editForm.stock_no.trim(),
         status: editForm.status,
         specs_json: normalizedDetails,
+        ...(editForm.stock_no.trim() && editForm.stock_no.trim() !== "-" ? { stock_no: editForm.stock_no.trim() } : {}),
       };
 
       const response = await fetch("/api/admin/cars", {

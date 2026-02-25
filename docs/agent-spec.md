@@ -11,6 +11,7 @@
 4. API inserts non-duplicate image URLs into `public.car_images`.
 5. Frontend data loaders read `public.cars` + `public.car_images` and render active cars only.
 6. Admin can open `/admin/cars` to edit car fields, save changes, and save-and-down-shelf (`status = hidden`).
+7. Admin edit page includes a vehicle-details template table; custom detail labels are saved into `cars.specs_json`.
 
 ## Security Rules
 - Admin import uses server-side env vars only:
