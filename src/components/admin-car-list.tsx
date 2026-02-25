@@ -45,21 +45,16 @@ export function AdminCarList() {
     status: "active",
   });
 
-  const canLoad = useMemo(() => adminToken.trim().length > 0 && !loading, [adminToken, loading]);
+  const canLoad = useMemo(() => !loading, [loading]);
 
   async function loadCars() {
-    if (!adminToken.trim()) {
-      setError("Please input Admin Token.");
-      return;
-    }
-
     setLoading(true);
     setError("");
     setMessage("");
     try {
       const response = await fetch("/api/admin/cars", {
         method: "GET",
-        headers: { "x-admin-token": adminToken.trim() },
+        headers: adminToken.trim() ? { "x-admin-token": adminToken.trim() } : undefined,
       });
       const payload = (await response.json()) as { cars?: CarListItem[] } & ApiErrorPayload;
       if (!response.ok) {
@@ -96,10 +91,6 @@ export function AdminCarList() {
 
   async function saveEdit(downShelfAfterSave: boolean) {
     if (!editingCarId) return;
-    if (!adminToken.trim()) {
-      setError("Please input Admin Token.");
-      return;
-    }
 
     setWorkingCarId(editingCarId);
     setError("");
@@ -124,7 +115,7 @@ export function AdminCarList() {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
-          "x-admin-token": adminToken.trim(),
+          ...(adminToken.trim() ? { "x-admin-token": adminToken.trim() } : {}),
         },
         body: JSON.stringify({ car_id: editingCarId, action: "update", updates }),
       });
@@ -149,18 +140,17 @@ export function AdminCarList() {
   return (
     <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Car List Management</h2>
-      <p className="text-sm text-slate-600">Use admin token to load cars, edit listings, and down-shelf from edit panel.</p>
+      <p className="text-sm text-slate-600">Load cars and manage listings. Admin session cookie is used by default.</p>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <label className="flex-1 space-y-2">
-          <span className="text-sm font-medium text-slate-800">Admin Token</span>
+            <span className="text-sm font-medium text-slate-800">Admin Token (optional)</span>
           <input
             type="password"
             value={adminToken}
             onChange={(event) => setAdminToken(event.target.value)}
             className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff7a1a]"
-            placeholder="Enter ADMIN_INGEST_TOKEN"
-            required
+            placeholder="Optional: use x-admin-token instead of cookie session"
           />
         </label>
         <button

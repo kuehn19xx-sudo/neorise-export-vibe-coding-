@@ -15,7 +15,7 @@ export default function AdminUploadPage() {
           Open Car List Management
         </Link>
       </div>
-      <CarIngestForm requireAdminToken />
+      <CarIngestForm />
     </main>
   );
 }

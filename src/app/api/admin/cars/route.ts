@@ -44,7 +44,14 @@ function requireAdminToken(request: Request): NextResponse | null {
     );
   }
 
-  const providedToken = request.headers.get("x-admin-token")?.trim() || "";
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  const cookieToken =
+    cookieHeader
+      .split(";")
+      .map((chunk) => chunk.trim())
+      .find((chunk) => chunk.startsWith("admin_token="))
+      ?.slice("admin_token=".length) ?? "";
+  const providedToken = request.headers.get("x-admin-token")?.trim() || cookieToken.trim();
   if (providedToken !== requiredAdminToken) {
     return NextResponse.json(
       {
