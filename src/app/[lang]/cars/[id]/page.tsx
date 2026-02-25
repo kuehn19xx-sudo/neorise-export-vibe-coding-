@@ -52,7 +52,7 @@ function buildSpecRows(car: Awaited<ReturnType<typeof getCarByIdServer>>): SpecR
 
   return [
     {
-      left: { label: "Ref ID", value: toDisplay(car.id) },
+      left: { label: "Ref ID", value: pickSpec(lookup, ["ref_no", "ref id"], car.id) },
       right: { label: "Steering", value: pickSpec(lookup, ["steering"]) },
     },
     {
@@ -60,27 +60,27 @@ function buildSpecRows(car: Awaited<ReturnType<typeof getCarByIdServer>>): SpecR
       right: { label: "Body Type", value: pickSpec(lookup, ["body type", "body_type"]) },
     },
     {
-      left: { label: "Model Year", value: toDisplay(car.year) },
-      right: { label: "Mlg(km)", value: toDisplay(car.mileage) },
+      left: { label: "Model Year", value: pickSpec(lookup, ["model year", "model_year"], car.year) },
+      right: { label: "Mlg(km)", value: pickSpec(lookup, ["mlg(km)", "fuel_mileage_km"], car.mileage) },
     },
     {
       left: {
         label: "Exterior Color",
         value: pickSpec(lookup, ["exterior color", "exterior_color", "color"]),
       },
-      right: { label: "Fuel", value: toDisplay(car.fuel) },
+      right: { label: "Fuel", value: pickSpec(lookup, ["fuel", "fuel_type_label"], car.fuel) },
     },
     {
-      left: { label: "Engine", value: pickSpec(lookup, ["engine", "engine size", "engine_size"]) },
-      right: { label: "Transmission", value: toDisplay(car.transmission) },
+      left: { label: "Engine", value: pickSpec(lookup, ["engine", "engine_label", "engine size", "engine_size"]) },
+      right: { label: "Transmission", value: pickSpec(lookup, ["transmission", "transmission_label"], car.transmission) },
     },
     {
-      left: { label: "Drivetrain", value: pickSpec(lookup, ["drivetrain", "drive", "drive type", "drive_type"]) },
+      left: { label: "Drivetrain", value: pickSpec(lookup, ["drivetrain", "drive_system", "drive", "drive type", "drive_type"]) },
       right: { label: "Batt.Cap.(kWh)", value: pickSpec(lookup, ["batt.cap.(kwh)", "battery", "battery capacity"]) },
     },
     {
-      left: { label: "Range(km)", value: pickSpec(lookup, ["range(km)", "range"]) },
-      right: { label: "Motor Power(kW)", value: pickSpec(lookup, ["motor power(kw)", "motor power", "power"]) },
+      left: { label: "Range(km)", value: pickSpec(lookup, ["range(km)", "range_km", "range"]) },
+      right: { label: "Motor Power(kW)", value: pickSpec(lookup, ["motor power(kw)", "motor_kw", "motor power", "power"]) },
     },
     {
       left: { label: "Seats", value: pickSpec(lookup, ["seats"]) },

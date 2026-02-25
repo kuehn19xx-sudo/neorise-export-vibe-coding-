@@ -16,12 +16,26 @@ type CarListItem = {
   engine: string;
   trans: string;
   fuel: string;
+  specs_json?: Record<string, string>;
 };
 
 type ApiErrorPayload = {
   error?: string;
   hint?: string;
 };
+
+const detailRows: Array<{ leftLabel: string; leftKey: string; rightLabel: string; rightKey: string }> = [
+  { leftLabel: "Reference No.", leftKey: "ref_no", rightLabel: "Steering", rightKey: "steering" },
+  { leftLabel: "Model Code", leftKey: "model_code", rightLabel: "Body Type", rightKey: "body_type" },
+  { leftLabel: "Model Year", leftKey: "model_year", rightLabel: "Mileage (km)", rightKey: "fuel_mileage_km" },
+  { leftLabel: "Exterior Color", leftKey: "exterior_color", rightLabel: "Fuel", rightKey: "fuel_type_label" },
+  { leftLabel: "Engine", leftKey: "engine_label", rightLabel: "Transmission", rightKey: "transmission_label" },
+  { leftLabel: "Drive System", leftKey: "drive_system", rightLabel: "Battery (kWh)", rightKey: "battery_kwh" },
+  { leftLabel: "Range (km)", leftKey: "range_km", rightLabel: "Motor Power (kW)", rightKey: "motor_kw" },
+  { leftLabel: "Seats", leftKey: "seats", rightLabel: "Doors", rightKey: "doors" },
+  { leftLabel: "Dimensions (mm)", leftKey: "dimensions_mm", rightLabel: "Volume (m3)", rightKey: "cubic_meters" },
+  { leftLabel: "Weight (kg)", leftKey: "weight_kg", rightLabel: "Max Load (kg)", rightKey: "max_load_kg" },
+];
 
 export function AdminCarList() {
   const [adminToken, setAdminToken] = useState("");
@@ -44,6 +58,7 @@ export function AdminCarList() {
     stock_no: "",
     status: "active",
   });
+  const [detailForm, setDetailForm] = useState<Record<string, string>>({});
 
   const canLoad = useMemo(() => !loading, [loading]);
 
@@ -85,8 +100,39 @@ export function AdminCarList() {
       stock_no: car.stock_no ?? "",
       status: car.status || "active",
     });
+    setDetailForm(car.specs_json ?? {});
     setError("");
     setMessage("");
+  }
+
+  async function downShelf(carId: string) {
+    setWorkingCarId(carId);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/cars", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          ...(adminToken.trim() ? { "x-admin-token": adminToken.trim() } : {}),
+        },
+        body: JSON.stringify({ car_id: carId, action: "down_shelf" }),
+      });
+      const payload = (await response.json()) as { car?: CarListItem } & ApiErrorPayload;
+      if (!response.ok) {
+        throw new Error([payload.error, payload.hint].filter(Boolean).join(" | ") || "Failed to down-shelf");
+      }
+
+      const updatedCar = payload.car;
+      if (updatedCar) {
+        setCars((prev) => prev.map((car) => (car.id === carId ? { ...car, ...updatedCar } : car)));
+      }
+      setMessage(`Car ${carId} is now hidden.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWorkingCarId(null);
+    }
   }
 
   async function saveEdit(downShelfAfterSave: boolean) {
@@ -97,6 +143,12 @@ export function AdminCarList() {
     setMessage("");
 
     try {
+      const normalizedDetails = Object.fromEntries(
+        Object.entries(detailForm)
+          .map(([key, value]) => [key, value.trim()])
+          .filter(([, value]) => value.length > 0),
+      );
+
       const updates = {
         brand: editForm.brand.trim(),
         model: editForm.model.trim(),
@@ -108,7 +160,8 @@ export function AdminCarList() {
         trans: editForm.trans.trim(),
         fuel: editForm.fuel.trim(),
         stock_no: editForm.stock_no.trim(),
-        status: downShelfAfterSave ? "hidden" : editForm.status,
+        status: editForm.status,
+        specs_json: normalizedDetails,
       };
 
       const response = await fetch("/api/admin/cars", {
@@ -124,7 +177,23 @@ export function AdminCarList() {
         throw new Error([payload.error, payload.hint].filter(Boolean).join(" | ") || "Failed to update car");
       }
 
-      const updatedCar = payload.car;
+      let updatedCar = payload.car;
+      if (downShelfAfterSave) {
+        const downShelfResponse = await fetch("/api/admin/cars", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            ...(adminToken.trim() ? { "x-admin-token": adminToken.trim() } : {}),
+          },
+          body: JSON.stringify({ car_id: editingCarId, action: "down_shelf" }),
+        });
+        const downShelfPayload = (await downShelfResponse.json()) as { car?: CarListItem } & ApiErrorPayload;
+        if (!downShelfResponse.ok) {
+          throw new Error([downShelfPayload.error, downShelfPayload.hint].filter(Boolean).join(" | ") || "Failed to down-shelf");
+        }
+        updatedCar = downShelfPayload.car ?? updatedCar;
+      }
+
       if (updatedCar) {
         setCars((prev) => prev.map((car) => (car.id === editingCarId ? { ...car, ...updatedCar } : car)));
       }
@@ -144,7 +213,7 @@ export function AdminCarList() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <label className="flex-1 space-y-2">
-            <span className="text-sm font-medium text-slate-800">Admin Token (optional)</span>
+          <span className="text-sm font-medium text-slate-800">Admin Token (optional)</span>
           <input
             type="password"
             value={adminToken}
@@ -195,6 +264,14 @@ export function AdminCarList() {
                       className="h-8 min-w-[76px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downShelf(car.id)}
+                      disabled={car.status === "hidden" || workingCarId === car.id}
+                      className="h-8 min-w-[76px] rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Down Shelf
                     </button>
                   </div>
                 </td>
@@ -278,6 +355,46 @@ export function AdminCarList() {
               <option value="sold">sold</option>
             </select>
           </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table className="min-w-full border-collapse text-sm">
+              <tbody>
+                {detailRows.map((row) => (
+                  <tr key={`${row.leftKey}-${row.rightKey}`} className="border-b border-slate-200 last:border-b-0">
+                    <td className="w-1/4 bg-slate-50 px-3 py-2 font-medium text-slate-700">{row.leftLabel}</td>
+                    <td className="w-1/4 px-3 py-2">
+                      <input
+                        value={detailForm[row.leftKey] ?? ""}
+                        onChange={(event) =>
+                          setDetailForm((prev) => ({
+                            ...prev,
+                            [row.leftKey]: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                        placeholder="Fill in"
+                      />
+                    </td>
+                    <td className="w-1/4 bg-slate-50 px-3 py-2 font-medium text-slate-700">{row.rightLabel}</td>
+                    <td className="w-1/4 px-3 py-2">
+                      <input
+                        value={detailForm[row.rightKey] ?? ""}
+                        onChange={(event) =>
+                          setDetailForm((prev) => ({
+                            ...prev,
+                            [row.rightKey]: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+                        placeholder="Fill in"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"

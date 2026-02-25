@@ -102,7 +102,7 @@ function normalizeCar(row: MaybeCarRow): CarRecord {
     year: toNumberValue(row.year, 0),
     mileage: toNumberValue(row.mileage, toNumberValue(row.mileage_km, 0)),
     fuel: normalizeFuel(row.fuel ?? row.fuel_type),
-    transmission: normalizeTransmission(row.transmission),
+    transmission: normalizeTransmission(row.transmission ?? row.trans),
     status: normalizeStatus(row.status),
     location: toStringValue(row.location, toStringValue(row.country, "China")),
     videoUrl: toStringValue(row.videoUrl) || toStringValue(row.video_url) || undefined,
