@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { CarsCatalog } from "@/components/cars-catalog";
-import { getActiveCars } from "@/data/cars";
 import { isSupportedLanguage, type AppLanguage } from "@/i18n/config";
 import { getMessages } from "@/i18n/get-messages";
+import { getActiveCarsServer } from "@/lib/cars-server";
 
 type CarsPageProps = {
   params: Promise<{ lang: string }>;
@@ -18,7 +18,7 @@ export default async function CarsPage({ params }: CarsPageProps) {
   const language = lang as AppLanguage;
   const isArabic = language === "ar";
   const messages = getMessages(language);
-  const cars = getActiveCars();
+  const cars = await getActiveCarsServer();
 
   return (
     <section className="space-y-8">

@@ -1,0 +1,14 @@
+# Put image files (*.jpg, *.jpeg, *.png, *.webp) in this folder.
+# File names control sort_order after alphabetical+numeric sort, e.g. 01.jpg, 02.jpg.
+
+brand: Toyota
+model: Corolla
+title: 2019 Toyota Corolla XSE
+price: $9,500
+year: 2019
+mileage: 48,000
+engine: 2.0L I4
+trans: Automatic
+fuel: Gasoline
+status: available
+stock_no: NR-0001

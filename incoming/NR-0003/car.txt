@@ -1,0 +1,11 @@
+brand: Mazda
+model: CX-5
+title: 2021 Mazda CX-5 Touring
+price: $18,900
+year: 2021
+mileage: 22,500
+engine: 2.5L I4
+trans: Automatic
+fuel: Gasoline
+status: available
+stock_no: NR-0003

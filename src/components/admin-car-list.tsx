@@ -1,0 +1,321 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+type CarListItem = {
+  id: string;
+  title: string;
+  status: string;
+  stock_no: string;
+  created_at: string;
+  brand: string;
+  model: string;
+  price: number;
+  year: number;
+  mileage: number;
+  engine: string;
+  trans: string;
+  fuel: string;
+};
+
+type ApiErrorPayload = {
+  error?: string;
+  hint?: string;
+};
+
+export function AdminCarList() {
+  const [adminToken, setAdminToken] = useState("");
+  const [cars, setCars] = useState<CarListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [workingCarId, setWorkingCarId] = useState<string | null>(null);
+  const [editingCarId, setEditingCarId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    brand: "",
+    model: "",
+    title: "",
+    price: "",
+    year: "",
+    mileage: "",
+    engine: "",
+    trans: "",
+    fuel: "",
+    stock_no: "",
+    status: "active",
+  });
+
+  const canLoad = useMemo(() => adminToken.trim().length > 0 && !loading, [adminToken, loading]);
+
+  async function loadCars() {
+    if (!adminToken.trim()) {
+      setError("Please input Admin Token.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/cars", {
+        method: "GET",
+        headers: { "x-admin-token": adminToken.trim() },
+      });
+      const payload = (await response.json()) as { cars?: CarListItem[] } & ApiErrorPayload;
+      if (!response.ok) {
+        throw new Error([payload.error, payload.hint].filter(Boolean).join(" | ") || "Failed to load cars");
+      }
+
+      setCars(payload.cars ?? []);
+      setMessage(`Loaded ${payload.cars?.length ?? 0} cars.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openEditor(car: CarListItem) {
+    setEditingCarId(car.id);
+    setEditForm({
+      brand: car.brand ?? "",
+      model: car.model ?? "",
+      title: car.title ?? "",
+      price: String(car.price ?? 0),
+      year: String(car.year ?? 0),
+      mileage: String(car.mileage ?? 0),
+      engine: car.engine ?? "",
+      trans: car.trans ?? "",
+      fuel: car.fuel ?? "",
+      stock_no: car.stock_no ?? "",
+      status: car.status || "active",
+    });
+    setError("");
+    setMessage("");
+  }
+
+  async function saveEdit(downShelfAfterSave: boolean) {
+    if (!editingCarId) return;
+    if (!adminToken.trim()) {
+      setError("Please input Admin Token.");
+      return;
+    }
+
+    setWorkingCarId(editingCarId);
+    setError("");
+    setMessage("");
+
+    try {
+      const updates = {
+        brand: editForm.brand.trim(),
+        model: editForm.model.trim(),
+        title: editForm.title.trim(),
+        price: editForm.price.trim(),
+        year: editForm.year.trim(),
+        mileage: editForm.mileage.trim(),
+        engine: editForm.engine.trim(),
+        trans: editForm.trans.trim(),
+        fuel: editForm.fuel.trim(),
+        stock_no: editForm.stock_no.trim(),
+        status: downShelfAfterSave ? "hidden" : editForm.status,
+      };
+
+      const response = await fetch("/api/admin/cars", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-admin-token": adminToken.trim(),
+        },
+        body: JSON.stringify({ car_id: editingCarId, action: "update", updates }),
+      });
+      const payload = (await response.json()) as { car?: CarListItem } & ApiErrorPayload;
+      if (!response.ok) {
+        throw new Error([payload.error, payload.hint].filter(Boolean).join(" | ") || "Failed to update car");
+      }
+
+      const updatedCar = payload.car;
+      if (updatedCar) {
+        setCars((prev) => prev.map((car) => (car.id === editingCarId ? { ...car, ...updatedCar } : car)));
+      }
+      setMessage(downShelfAfterSave ? `Car ${editingCarId} saved and down-shelved.` : `Car ${editingCarId} updated.`);
+      setEditingCarId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWorkingCarId(null);
+    }
+  }
+
+  return (
+    <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-slate-900">Car List Management</h2>
+      <p className="text-sm text-slate-600">Use admin token to load cars, edit listings, and down-shelf from edit panel.</p>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <label className="flex-1 space-y-2">
+          <span className="text-sm font-medium text-slate-800">Admin Token</span>
+          <input
+            type="password"
+            value={adminToken}
+            onChange={(event) => setAdminToken(event.target.value)}
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-[#ff7a1a]"
+            placeholder="Enter ADMIN_INGEST_TOKEN"
+            required
+          />
+        </label>
+        <button
+          type="button"
+          onClick={loadCars}
+          disabled={!canLoad}
+          className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {loading ? "Loading..." : "Load Cars"}
+        </button>
+      </div>
+
+      {message ? <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{message}</p> : null}
+      {error ? <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p> : null}
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">ID</th>
+              <th className="px-3 py-2 font-medium">Title</th>
+              <th className="px-3 py-2 font-medium">Stock No</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Created At</th>
+              <th className="px-3 py-2 font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cars.map((car) => (
+              <tr key={car.id} className="border-t border-slate-200">
+                <td className="px-3 py-2 font-mono text-xs text-slate-700">{car.id}</td>
+                <td className="px-3 py-2 text-slate-900">{car.title}</td>
+                <td className="px-3 py-2 text-slate-700">{car.stock_no}</td>
+                <td className="px-3 py-2 text-slate-700">{car.status}</td>
+                <td className="px-3 py-2 text-slate-700">{car.created_at || "-"}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openEditor(car)}
+                      disabled={workingCarId === car.id}
+                      className="h-8 min-w-[76px] rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {editingCarId ? (
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Edit Car: {editingCarId}</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              value={editForm.brand}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, brand: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Brand"
+            />
+            <input
+              value={editForm.model}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, model: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Model"
+            />
+            <input
+              value={editForm.title}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+              placeholder="Title"
+            />
+            <input
+              value={editForm.price}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, price: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Price"
+            />
+            <input
+              value={editForm.year}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, year: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Year"
+            />
+            <input
+              value={editForm.mileage}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, mileage: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Mileage"
+            />
+            <input
+              value={editForm.stock_no}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, stock_no: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Stock No"
+            />
+            <input
+              value={editForm.engine}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, engine: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Engine"
+            />
+            <input
+              value={editForm.trans}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, trans: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Transmission"
+            />
+            <input
+              value={editForm.fuel}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, fuel: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Fuel"
+            />
+            <select
+              value={editForm.status}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, status: event.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="active">active</option>
+              <option value="hidden">hidden</option>
+              <option value="sold">sold</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => saveEdit(false)}
+              disabled={workingCarId === editingCarId}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {workingCarId === editingCarId ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => saveEdit(true)}
+              disabled={workingCarId === editingCarId}
+              className="rounded-lg border border-rose-300 px-4 py-2 text-xs font-semibold text-rose-700 hover:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {workingCarId === editingCarId ? "Saving..." : "Save & Down Shelf"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingCarId(null)}
+              disabled={workingCarId === editingCarId}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      ) : null}
+    </section>
+  );
+}
