@@ -269,9 +269,9 @@ export function AdminCarList() {
                       type="button"
                       onClick={() => downShelf(car.id)}
                       disabled={car.status === "hidden" || workingCarId === car.id}
-                      className="h-8 min-w-[76px] rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-8 min-w-[76px] rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Down Shelf
+                      Images
                     </button>
                   </div>
                 </td>
