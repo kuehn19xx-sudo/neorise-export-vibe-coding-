@@ -170,6 +170,20 @@ function sanitizeImageFiles(files: File[]): File[] {
   return files.filter((file) => SUPPORTED_IMAGE_EXTS.has(path.extname(file.name).toLowerCase()));
 }
 
+function buildSafeStorageFileName(originalName: string, index: number): string {
+  const ext = path.extname(originalName).toLowerCase();
+  const base = path.basename(originalName, ext);
+  const normalizedBase = base
+    .normalize("NFKD")
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+  const fallbackBase = normalizedBase || `image-${index + 1}`;
+  const safeExt = SUPPORTED_IMAGE_EXTS.has(ext) ? ext : ".jpg";
+  return `${Date.now()}-${index + 1}-${fallbackBase}${safeExt}`;
+}
+
 function getAdminClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -402,8 +416,10 @@ export async function POST(request: Request) {
     const prefix = process.env.SUPABASE_CAR_IMAGES_PREFIX || "car";
     const uploadedRows: Array<{ image_url: string }> = [];
 
-    for (const file of imageFiles) {
-      const storagePath = `${prefix}/${carId}/${file.name}`;
+    for (let index = 0; index < imageFiles.length; index += 1) {
+      const file = imageFiles[index];
+      const safeFileName = buildSafeStorageFileName(file.name, index);
+      const storagePath = `${prefix}/${carId}/${safeFileName}`;
       const fileBytes = new Uint8Array(await file.arrayBuffer());
       const { error: uploadError } = await supabase.storage.from(bucket).upload(storagePath, fileBytes, {
         contentType: file.type || undefined,
