@@ -438,6 +438,39 @@ export function AdminCarList() {
     }
   }
 
+  async function deleteCar() {
+    if (!editingCarId) return;
+    const confirmed = window.confirm(
+      `Delete car ${editingCarId}? This will remove car record and related image rows permanently.`,
+    );
+    if (!confirmed) return;
+
+    setWorkingCarId(editingCarId);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/admin/cars", {
+        method: "PATCH",
+        headers: authHeaders(true),
+        body: JSON.stringify({ car_id: editingCarId, action: "delete" }),
+      });
+      const payload = (await response.json()) as { deleted_images?: number } & ApiErrorPayload;
+      if (!response.ok) {
+        throw new Error([payload.error, payload.hint].filter(Boolean).join(" | ") || "Failed to delete car");
+      }
+
+      const deletedId = editingCarId;
+      setCars((prev) => prev.filter((car) => car.id !== deletedId));
+      setEditingCarId(null);
+      setMessage(`Car ${deletedId} deleted. Removed ${payload.deleted_images ?? 0} related image rows.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWorkingCarId(null);
+    }
+  }
+
   return (
     <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold text-slate-900">Car List Management</h2>
@@ -640,6 +673,14 @@ export function AdminCarList() {
               className="rounded-lg border border-rose-300 px-4 py-2 text-xs font-semibold text-rose-700 hover:border-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {workingCarId === editingCarId ? "Saving..." : "Save & Down Shelf"}
+            </button>
+            <button
+              type="button"
+              onClick={deleteCar}
+              disabled={workingCarId === editingCarId}
+              className="rounded-lg border border-rose-500 px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {workingCarId === editingCarId ? "Deleting..." : "Delete"}
             </button>
             <button
               type="button"

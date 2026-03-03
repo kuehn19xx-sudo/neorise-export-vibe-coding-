@@ -169,6 +169,63 @@ async function updateStatusById(
   return { data: null, error: error?.message ?? "Car not found" };
 }
 
+async function findCarById(
+  supabase: LooseSupabaseClient,
+  column: "id" | "car_id",
+  carId: string,
+) {
+  const { data, error } = await supabase.from("cars").select("*").eq(column, carId).maybeSingle();
+  if (!error && data) return { data: data as CarRow, error: null };
+  return { data: null, error: error?.message ?? "Car not found" };
+}
+
+async function deleteCarById(
+  supabase: LooseSupabaseClient,
+  column: "id" | "car_id",
+  carId: string,
+) {
+  const carResult = await findCarById(supabase, column, carId);
+  if (carResult.error || !carResult.data) {
+    return { done: false, error: carResult.error ?? "Car not found", deletedImages: 0 };
+  }
+
+  const row = carResult.data;
+  const relatedCarIds = [...new Set([toStringValue(row.id), toStringValue(row.car_id), carId].filter(Boolean))];
+  let deletedImages = 0;
+
+  for (const relatedId of relatedCarIds) {
+    const { data, error } = await supabase.from("car_images").delete().eq("car_id", relatedId).select("image_url");
+    if (error) {
+      const missingColumn = parseMissingColumnName(error.message);
+      if (missingColumn === "car_id") {
+        throw new Error("public.car_images.car_id column is missing");
+      }
+      throw new Error(`Failed to delete related public.car_images rows: ${error.message}`);
+    }
+    deletedImages += Array.isArray(data) ? data.length : 0;
+  }
+
+  const { data: deletedCars, error: deleteCarError } = await supabase
+    .from("cars")
+    .delete()
+    .eq(column, carId)
+    .select("*");
+
+  if (deleteCarError) {
+    return { done: false, error: deleteCarError.message, deletedImages };
+  }
+  if (!deletedCars || deletedCars.length === 0) {
+    return { done: false, error: "Car not found", deletedImages };
+  }
+
+  return {
+    done: true,
+    deletedCar: normalizeCar(deletedCars[0] as CarRow),
+    deletedImages,
+    error: null,
+  };
+}
+
 const ALLOWED_UPDATE_KEYS = new Set([
   "brand",
   "model",
@@ -267,9 +324,9 @@ export async function PATCH(request: Request) {
       );
     }
     const action = String(payload?.action ?? "update").trim().toLowerCase();
-    if (action !== "down_shelf" && action !== "update") {
+    if (action !== "down_shelf" && action !== "update" && action !== "delete") {
       return NextResponse.json(
-        { error: "Invalid action", hint: "Use action=update or action=down_shelf." },
+        { error: "Invalid action", hint: "Use action=update, action=down_shelf, or action=delete." },
         { status: 400 },
       );
     }
@@ -308,18 +365,35 @@ export async function PATCH(request: Request) {
       });
     }
 
-    let result = await updateStatusById(supabase, "id", carId, "hidden");
-    if (result.error && isNoMatchError(result.error)) {
-      result = await updateStatusById(supabase, "car_id", carId, "hidden");
+    if (action === "down_shelf") {
+      let result = await updateStatusById(supabase, "id", carId, "hidden");
+      if (result.error && isNoMatchError(result.error)) {
+        result = await updateStatusById(supabase, "car_id", carId, "hidden");
+      }
+      if (result.error || !result.data) {
+        throw new Error(`Failed to update car status: ${result.error ?? "car not found"}`);
+      }
+
+      return NextResponse.json({
+        car: normalizeCar(result.data),
+        action,
+        done: true,
+      });
     }
-    if (result.error || !result.data) {
-      throw new Error(`Failed to update car status: ${result.error ?? "car not found"}`);
+
+    let deleteResult = await deleteCarById(supabase, "id", carId);
+    if (!deleteResult.done && deleteResult.error && isNoMatchError(deleteResult.error)) {
+      deleteResult = await deleteCarById(supabase, "car_id", carId);
+    }
+    if (!deleteResult.done) {
+      throw new Error(`Failed to delete car: ${deleteResult.error ?? "car not found"}`);
     }
 
     return NextResponse.json({
-      car: normalizeCar(result.data),
       action,
       done: true,
+      deleted_car: deleteResult.deletedCar,
+      deleted_images: deleteResult.deletedImages,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
